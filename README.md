@@ -1,0 +1,1 @@
+### Vector implementation as an introductory assignment for a coursework.
