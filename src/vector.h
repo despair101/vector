@@ -3,6 +3,7 @@
 #include <new>
 #include <type_traits>
 #include <memory>
+#include <algorithm>
 
 template <typename T>
 class Vector {
@@ -151,6 +152,7 @@ public:
         if (ncap <= cap_) {
             return;
         }
+        ncap = std::max(ncap, cap_ * 2);
         T* ndata = reinterpret_cast<T*>(new char[ncap * sizeof(T)]);
         size_t j = 0;
         try {
@@ -208,11 +210,7 @@ public:
             data_ = ndata;
             cap_ = ncap;
         } else {
-            try {
-                new (data_ + size_) T(x);
-            } catch (...) {
-                throw;
-            }
+            new (data_ + size_) T(x);
         }
         ++size_;
     }
@@ -229,28 +227,44 @@ public:
         if (size_ == nsize) {
             return;
         }
-        T* ndata = reinterpret_cast<T*>(new char[nsize * sizeof(T)]);
-        size_t j = 0;
-        try {
-            for (; j < size_; ++j) {
-                new (ndata + j) T(data_[j]);
+        if (nsize <= cap_) {
+            size_t j = size_;
+            try {
+                for (; j < nsize; ++j) {
+                    new (data_ + j) T(val);
+                }
+            } catch (...) {
+                for (size_t i = size_; i < j; ++i) {
+                    (data_ + i)->~T();
+                }
+                throw;
             }
-            for (; j < nsize; ++j) {
-                new (ndata + j) T(val);
+        } else {
+            size_t ncap = std::max(nsize, cap_ * 2);
+            T* ndata = reinterpret_cast<T*>(new char[ncap * sizeof(T)]);
+            size_t j = 0;
+            try {
+                for (; j < size_; ++j) {
+                    new (ndata + j) T(data_[j]);
+                }
+                for (; j < nsize; ++j) {
+                    new (ndata + j) T(val);
+                }
+            } catch (...) {
+                for (size_t i = 0; i < j; ++i) {
+                    (ndata + i)->~T();
+                }
+                delete[] reinterpret_cast<char*>(ndata);
+                throw;
             }
-        } catch (...) {
-            for (size_t i = 0; i < j; ++i) {
-                (ndata + i)->~T();
+            for (size_t i = 0; i < size_; ++i) {
+                (data_ + i)->~T();
             }
-            delete[] reinterpret_cast<char*>(ndata);
-            throw;
+            delete[] reinterpret_cast<char*>(data_);
+            data_ = ndata;
+            cap_ = ncap;
         }
-        for (size_t i = 0; i < size_; ++i) {
-            (data_ + i)->~T();
-        }
-        delete[] reinterpret_cast<char*>(data_);
-        data_ = ndata;
-        cap_ = size_ = nsize;
+        size_ = nsize;
     }
 
     void Swap(Vector& other) {

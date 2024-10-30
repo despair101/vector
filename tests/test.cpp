@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <random>
+#include <iostream>
 
 #include "../src/vector.h"
 
@@ -274,25 +275,27 @@ TEST_CASE("Vector of vectors") {
     REQUIRE(v[2] == Vector{1, 3, 3, 7});
 }
 
+
 struct EvilInt {
     static size_t counter;
     EvilInt(int val) : val_(val) {
-        if (val == 228) {
+        if (val == 228 || counter == 10) {
             throw 1941;
-        }
-        if (counter == 200) {
-            throw 1945;
         }
         ++counter;
     }
     EvilInt(const EvilInt& other) : val_(other.val_) {
-        if (counter == 200) {
+        if (counter == 10) {
             throw 1945;
         }
         ++counter;
     }
     ~EvilInt() {
         --counter;
+    }
+
+    bool operator==(const EvilInt& other) const {
+        return val_ == other.val_;
     }
     int val_;
 };
@@ -314,4 +317,35 @@ TEST_CASE("Strong exception safety") {
     REQUIRE(a[2].val_ == 2);
     REQUIRE(a.Size() == 3);
     REQUIRE(old_cap == a.Capacity());
+    a.Clear();
+
+    Vector<EvilInt> b(2, 0);
+    b.Reserve(5);
+    b.PopBack();
+    b.PushBack(1);
+    b.Resize(3, 2);
+    b.PushBack(3);
+    REQUIRE(b[0].val_ == 0);
+    REQUIRE(b[1].val_ == 1);
+    REQUIRE(b[2].val_ == 2);
+    REQUIRE(b[3].val_ == 3);
+    REQUIRE(b.Size() == 4);
+    REQUIRE_THROWS(b.Resize(20, 5));
+    b.PushBack(4);
+
+    b.Reserve(30);
+    REQUIRE(b.Size() == 5);
+    REQUIRE(b[4] == 4);
+    b.PopBack();
+    b.PopBack();
+    Vector c = b;
+    REQUIRE_THROWS(b.Resize(7, 6));
+    REQUIRE(b == c);
+
+    a.Clear();
+    b.Clear();
+    c.Clear();
+
+    std::vector<EvilInt> d(7, 3);
+    REQUIRE_THROWS(Vector<EvilInt>(d.begin(), d.end()));
 }
